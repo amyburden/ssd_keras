@@ -410,7 +410,7 @@ def ssd_mn_300(image_size,
     conv15_2 = BatchNormalization(epsilon=2e-5, name='bn15_2')(conv15_2)
     conv15_2 = Activation('relu')(conv15_2)
     # 3
-    conv16_1 = Conv2D(128, (1, 1), activation='relu', padding='same', kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv15_1')(conv15_2)
+    conv16_1 = Conv2D(128, (1, 1), activation='relu', padding='same', kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv16_1')(conv15_2)
     conv16_1 = BatchNormalization(epsilon=2e-5, name='bn16_1')(conv16_1)
     conv16_1 = Activation('relu')(conv16_1)
     conv16_1 = ZeroPadding2D(padding=((1, 1), (1, 1)), name='conv16_padding')(conv16_1)
@@ -418,12 +418,12 @@ def ssd_mn_300(image_size,
     conv16_2 = BatchNormalization(epsilon=2e-5, name='bn16_2')(conv16_2)
     conv16_2 = Activation('relu')(conv16_2)
     # 2
-    conv17_1 = Conv2D(128, (1, 1), activation='relu', padding='same', kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv16_1')(conv16_2)
+    conv17_1 = Conv2D(128, (1, 1), activation='relu', padding='same', kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv17_1')(conv16_2)
     conv17_1 = BatchNormalization(epsilon=2e-5, name='bn17_1')(conv17_1)
     conv17_1 = Activation('relu')(conv17_1)
     conv17_1 = ZeroPadding2D(padding=((1, 1), (1, 1)), name='conv17_padding')(conv17_1)
     conv17_2 = Conv2D(256, (3, 3), strides=(1, 1), activation='relu', padding='valid', kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv17_2')(conv17_1)
-    conv17_2 = BatchNormalization(epsilon=2e-5, name='bn17_1')(conv17_2)
+    conv17_2 = BatchNormalization(epsilon=2e-5, name='bn17_2')(conv17_2)
     conv17_2 = Activation('relu')(conv17_2)
     # Feed conv4_3 into the L2 normalization layer
     conv11_norm = L2Normalization(gamma_init=20, name='conv11_norm')(conv11)
