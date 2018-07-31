@@ -26,7 +26,7 @@ def MobileNetV2(input_shape,
                 input_tensor=None,
                 min_scale=None,
                 max_scale=None,
-                scales=None,
+                scales=[0.07, 0.15, 0.33, 0.51, 0.69, 0.87, 1.05],
                 aspect_ratios_global=None,
                 aspect_ratios_per_layer=[[1.0, 2.0, 0.5],
                                          [1.0, 2.0, 0.5, 3.0, 1.0/3.0],
@@ -53,7 +53,7 @@ def MobileNetV2(input_shape,
     l2_reg = kwargs.get('l2_reg', 0.00005)
     alpha = kwargs.get('alpha', 1.)
 
-    if os.path.exists(weights):
+    if weights and os.path.exists(weights):
         raise ValueError('The `weights` argument should be either '
                          '`None` (random initialization), `imagenet` '
                          '(pre-training on ImageNet), '
@@ -105,27 +105,27 @@ def MobileNetV2(input_shape,
 
     img_input = Input(shape=input_shape)
     # 300
-    x, _ = _inverted_res_block(img_input, filters=16, alpha=alpha, stride=1, expansion=1, block_id=0)
+    x = _inverted_res_block(img_input, filters=16, alpha=alpha, stride=1, expansion=1, block_id=0)
     # 150
-    x, _ = _inverted_res_block(x, filters=24, stride=2, expansion=6, block_id=1, **kwargs)
-    x, _ = _inverted_res_block(x, filters=24, stride=1, expansion=6, block_id=2, **kwargs)
+    x = _inverted_res_block(x, filters=24, stride=2, expansion=6, block_id=1, **kwargs)
+    x = _inverted_res_block(x, filters=24, stride=1, expansion=6, block_id=2, **kwargs)
     # 75
-    x, _ = _inverted_res_block(x, filters=32, stride=2, expansion=6, block_id=3, **kwargs)
-    x, _ = _inverted_res_block(x, filters=32, stride=1, expansion=6, block_id=4, **kwargs)
-    x, _ = _inverted_res_block(x, filters=32, stride=1, expansion=6, block_id=5, **kwargs)
+    x = _inverted_res_block(x, filters=32, stride=2, expansion=6, block_id=3, **kwargs)
+    x = _inverted_res_block(x, filters=32, stride=1, expansion=6, block_id=4, **kwargs)
+    x = _inverted_res_block(x, filters=32, stride=1, expansion=6, block_id=5, **kwargs)
     # 38
-    x, _ = _inverted_res_block(x, filters=64, stride=2, expansion=6, block_id=6, **kwargs)
-    x, _ = _inverted_res_block(x, filters=64, stride=1, expansion=6, block_id=7, **kwargs)
-    x, _ = _inverted_res_block(x, filters=64, stride=1, expansion=6, block_id=8, **kwargs)
-    x, _ = _inverted_res_block(x, filters=64, stride=1, expansion=6, block_id=9, **kwargs)
-    x, _ = _inverted_res_block(x, filters=96, stride=1, expansion=6, block_id=10, **kwargs)
-    x, _ = _inverted_res_block(x, filters=96, stride=1, expansion=6, block_id=11, **kwargs)
-    x, _ = _inverted_res_block(x, filters=96, stride=1, expansion=6, block_id=12, **kwargs)
+    x = _inverted_res_block(x, filters=64, stride=2, expansion=6, block_id=6, **kwargs)
+    x = _inverted_res_block(x, filters=64, stride=1, expansion=6, block_id=7, **kwargs)
+    x = _inverted_res_block(x, filters=64, stride=1, expansion=6, block_id=8, **kwargs)
+    x = _inverted_res_block(x, filters=64, stride=1, expansion=6, block_id=9, **kwargs)
+    x = _inverted_res_block(x, filters=96, stride=1, expansion=6, block_id=10, **kwargs)
+    x = _inverted_res_block(x, filters=96, stride=1, expansion=6, block_id=11, **kwargs)
+    x = _inverted_res_block(x, filters=96, stride=1, expansion=6, block_id=12, **kwargs)
     # 19
-    x, conv0_pw = _inverted_res_block(x, filters=160, stride=2, expansion=6, block_id=13, **kwargs)
-    x, _ = _inverted_res_block(x, filters=160, stride=1, expansion=6, block_id=14, **kwargs)
-    x, _ = _inverted_res_block(x, filters=160, stride=1, expansion=6, block_id=15, **kwargs)
-    x, _ = _inverted_res_block(x, filters=320, stride=1, expansion=6, block_id=16, **kwargs)
+    conv0_pw = _inverted_res_block(x, filters=160, stride=2, expansion=6, block_id=13, **kwargs)
+    x = _inverted_res_block(conv0_pw, filters=160, stride=1, expansion=6, block_id=14, **kwargs)
+    x = _inverted_res_block(x, filters=160, stride=1, expansion=6, block_id=15, **kwargs)
+    x = _inverted_res_block(x, filters=320, stride=1, expansion=6, block_id=16, **kwargs)
     # 10
 
     # SSD lite
@@ -348,16 +348,16 @@ def _inverted_res_block(inputs, expansion, stride, filters, block_id, **kwargs):
 
     if block_id:
         # Expand
-        conv = Conv2D(expansion * in_channels, kernel_size=1, padding='same', use_bias=use_bias,
+        x = Conv2D(expansion * in_channels, kernel_size=1, padding='same', use_bias=use_bias,
                       kernel_regularizer=l2(l2_reg), name=prefix + 'expand')(x)
-        x = BatchNormalization(epsilon=epsilon, momentum=0.999, name=prefix + 'expand_BN')(conv)
+        x = BatchNormalization(epsilon=epsilon, momentum=0.999, name=prefix + 'expand_BN')(x)
         x = ReLU(6., name=prefix + 'expand_relu')(x)
     else:
         prefix = 'expanded_conv_'
         first_block_filters = _make_divisible(32 * alpha, 8)
-        conv = Conv2D(first_block_filters, kernel_size=3, strides=2, padding='same', use_bias=use_bias,
+        x = Conv2D(first_block_filters, kernel_size=3, strides=2, padding='same', use_bias=use_bias,
                       kernel_regularizer=l2(l2_reg), name='Conv1')(x)
-        x = BatchNormalization(epsilon=epsilon, momentum=0.999, name='bn_Conv1')(conv)
+        x = BatchNormalization(epsilon=epsilon, momentum=0.999, name='bn_Conv1')(x)
         x = ReLU(6., name='Conv1_relu')(x)
 
     # Depthwise
@@ -373,5 +373,5 @@ def _inverted_res_block(inputs, expansion, stride, filters, block_id, **kwargs):
 
     if in_channels == pointwise_filters and stride == 1:
         return Add(name=prefix + 'add')([inputs, x])
-    return x, conv
+    return x
 
