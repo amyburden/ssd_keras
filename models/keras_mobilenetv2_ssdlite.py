@@ -28,12 +28,12 @@ def MobileNetV2(input_shape,
                 max_scale=None,
                 scales=[0.07, 0.15, 0.33, 0.51, 0.69, 0.87, 1.05],
                 aspect_ratios_global=None,
-                aspect_ratios_per_layer=[[1.0, 2.0, 0.5],
-                                         [1.0, 2.0, 0.5, 3.0, 1.0/3.0],
-                                         [1.0, 2.0, 0.5, 3.0, 1.0/3.0],
-                                         [1.0, 2.0, 0.5, 3.0, 1.0/3.0],
-                                         [1.0, 2.0, 0.5],
-                                         [1.0, 2.0, 0.5]],
+                aspect_ratios_per_layer=[[1.0, 2.0, 0.5, 3.0, 1.0 / 3.0],
+                                         [1.0, 2.0, 0.5, 3.0, 1.0 / 3.0],
+                                         [1.0, 2.0, 0.5, 3.0, 1.0 / 3.0],
+                                         [1.0, 2.0, 0.5, 3.0, 1.0 / 3.0],
+                                         [1.0, 2.0, 0.5, 3.0, 1.0 / 3.0],
+                                         [1.0, 2.0, 0.5, 3.0, 1.0 / 3.0]],
                 two_boxes_for_ar1=True,
                 steps=[8, 16, 32, 64, 100, 300],
                 offsets=None,
@@ -52,6 +52,7 @@ def MobileNetV2(input_shape,
 
     l2_reg = kwargs.get('l2_reg', 0.00005)
     alpha = kwargs.get('alpha', 1.)
+    preprocess = kwargs.get('preprocess', True)
 
     if weights and os.path.exists(weights):
         raise ValueError('The `weights` argument should be either '
@@ -104,8 +105,10 @@ def MobileNetV2(input_shape,
         offsets = [None] * n_predictor_layers
 
     img_input = Input(shape=input_shape)
+    if preprocess:
+        x = Lambda(lambda x: 2*x/255.-1.)(img_input)
     # 300
-    x = _inverted_res_block(img_input, filters=16, alpha=alpha, stride=1, expansion=1, block_id=0)
+    x = _inverted_res_block(x, filters=16, alpha=alpha, stride=1, expansion=1, block_id=0)
     # 150
     x = _inverted_res_block(x, filters=24, stride=2, expansion=6, block_id=1, **kwargs)
     x = _inverted_res_block(x, filters=24, stride=1, expansion=6, block_id=2, **kwargs)

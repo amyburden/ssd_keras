@@ -499,6 +499,7 @@ class SSDInputEncoder:
             elif isinstance(this_offsets, (int, float)):
                 offset_height = this_offsets
                 offset_width = this_offsets
+
         # Now that we have the offsets and step sizes, compute the grid of anchor box center points.
         cy = np.linspace(offset_height * step_height, (offset_height + feature_map_size[0] - 1) * step_height, feature_map_size[0])
         cx = np.linspace(offset_width * step_width, (offset_width + feature_map_size[1] - 1) * step_width, feature_map_size[1])

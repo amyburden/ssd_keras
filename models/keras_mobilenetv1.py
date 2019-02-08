@@ -22,7 +22,6 @@ from keras.utils import conv_utils
 from keras.utils.data_utils import get_file
 from keras.engine.topology import get_source_inputs
 from keras.engine import InputSpec
-from keras.applications.imagenet_utils import _obtain_input_shape
 from keras.applications.inception_v3 import preprocess_input
 from keras.applications.imagenet_utils import decode_predictions
 import tensorflow as tf
@@ -85,14 +84,14 @@ def ssd_mn_300(image_size,
             l2_regularization=0.0005,
             min_scale=None,
             max_scale=None,
-            scales=None,
+            scales=[0.07, 0.15, 0.33, 0.51, 0.69, 0.87, 1.05],
             aspect_ratios_global=None,
-            aspect_ratios_per_layer=[[1.0, 2.0, 0.5],
+            aspect_ratios_per_layer=[[1.0, 2.0, 0.5, 3.0, 1.0/3.0],
                                      [1.0, 2.0, 0.5, 3.0, 1.0/3.0],
                                      [1.0, 2.0, 0.5, 3.0, 1.0/3.0],
                                      [1.0, 2.0, 0.5, 3.0, 1.0/3.0],
-                                     [1.0, 2.0, 0.5],
-                                     [1.0, 2.0, 0.5]],
+                                     [1.0, 2.0, 0.5, 3.0, 1.0/3.0],
+                                     [1.0, 2.0, 0.5, 3.0, 1.0/3.0]],
             two_boxes_for_ar1=True,
             steps=[8, 16, 32, 64, 100, 300],
             offsets=None,
