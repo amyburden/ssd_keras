@@ -401,12 +401,12 @@ class DataGenerator:
                   images_dirs,
                   image_set_filenames,
                   annotations_dirs=[],
-                  classes=['background',
+                  classes=('background',
                            'aeroplane', 'bicycle', 'bird', 'boat',
                            'bottle', 'bus', 'car', 'cat',
                            'chair', 'cow', 'diningtable', 'dog',
                            'horse', 'motorbike', 'person', 'pottedplant',
-                           'sheep', 'sofa', 'train', 'tvmonitor'],
+                           'sheep', 'sofa', 'train', 'tvmonitor'),
                   include_classes = 'all',
                   exclude_truncated=False,
                   exclude_difficult=False,
@@ -493,6 +493,11 @@ class DataGenerator:
                         class_id = self.classes.index(class_name)
                         # Check whether this class is supposed to be included in the dataset.
                         if (not self.include_classes == 'all') and (not class_id in self.include_classes): continue
+
+                        # bodong
+                        if not self.include_classes == 'all':
+                            class_id = self.include_classes.index(class_id)
+
                         pose = obj.find('pose', recursive=False).text
                         truncated = int(obj.find('truncated', recursive=False).text)
                         if exclude_truncated and (truncated == 1): continue
@@ -631,6 +636,10 @@ class DataGenerator:
                         if (not self.include_classes == 'all') and (not cat_id in self.include_classes): continue
                         # Transform the original class ID to fit in the sequence of consecutive IDs.
                         class_id = self.cats_to_classes[cat_id]
+                        # bodong
+                        if not self.include_classes == 'all':
+                            class_id = self.include_classes.index(class_id)
+
                         xmin = annotation['bbox'][0]
                         ymin = annotation['bbox'][1]
                         width = annotation['bbox'][2]
