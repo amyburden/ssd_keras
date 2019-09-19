@@ -274,7 +274,8 @@ def build_model(image_size,
     if swap_channels:
         x1 = Lambda(input_channel_swap, output_shape=(img_height, img_width, img_channels), name='input_channel_swap')(x1)
     leaky_alpha = 0.1171875
-
+    if mode == 'hardware':
+        x1 = x
     conv1 = Conv2D(16, (5, 5), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv1')(x1)
     conv1 = BatchNormalization(axis=3, momentum=0.99, name='bn1')(conv1) # Tensorflow uses filter format [filter_height, filter_width, in_channels, out_channels], hence axis = 3
     conv1 = LeakyReLU(leaky_alpha, name='relu1')(conv1)
@@ -417,6 +418,10 @@ def build_model(image_size,
                                                    img_width=img_width,
                                                    name='decoded_predictions')(predictions)
         model = Model(inputs=x, outputs=decoded_predictions)
+    elif mode == 'hardware':
+        model = Model(inputs=x, outputs=[classes4,classes5,classes6,classes7,boxes4,boxes5,boxes6, boxes7])
+    elif mode == 'anchor':
+        model = Model(inputs=x, outputs=[anchors4, anchors5, anchors6, anchors7])
     else:
         raise ValueError("`mode` must be one of 'training', 'inference' or 'inference_fast', but received '{}'.".format(mode))
 

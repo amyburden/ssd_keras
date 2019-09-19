@@ -155,11 +155,13 @@ class AnchorBoxes(Layer):
         for ar in self.aspect_ratios:
             if (ar == 1):
                 # Compute the regular anchor box for aspect ratio 1.
-                box_height = box_width = self.this_scale * size
+                box_height = self.this_scale * size / np.sqrt(ar)
+                box_width = self.this_scale * size * np.sqrt(ar)
                 wh_list.append((box_width, box_height))
                 if self.two_boxes_for_ar1:
                     # Compute one slightly larger version using the geometric mean of this scale value and the next.
-                    box_height = box_width = np.sqrt(self.this_scale * self.next_scale) * size
+                    box_height = np.sqrt(self.this_scale * self.next_scale) * size / np.sqrt(ar)
+                    box_width = np.sqrt(self.this_scale * self.next_scale) * size * np.sqrt(ar)
                     wh_list.append((box_width, box_height))
             else:
                 box_height = self.this_scale * size / np.sqrt(ar)

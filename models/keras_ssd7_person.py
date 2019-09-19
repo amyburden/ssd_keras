@@ -19,7 +19,7 @@ limitations under the License.
 from __future__ import division
 import numpy as np
 from keras.models import Model
-from keras.layers import Input, Lambda, Conv2D, MaxPooling2D, BatchNormalization, ELU, Reshape, Concatenate, Activation
+from keras.layers import *
 from keras.regularizers import l2
 import keras.backend as K
 
@@ -51,128 +51,6 @@ def build_model(image_size,
                 top_k=200,
                 nms_max_output_size=400,
                 return_predictor_sizes=False):
-    '''
-    Build a Keras model with SSD architecture, see references.
-
-    The model consists of convolutional feature layers and a number of convolutional
-    predictor layers that take their input from different feature layers.
-    The model is fully convolutional.
-
-    The implementation found here is a smaller version of the original architecture
-    used in the paper (where the base network consists of a modified VGG-16 extended
-    by a few convolutional feature layers), but of course it could easily be changed to
-    an arbitrarily large SSD architecture by following the general design pattern used here.
-    This implementation has 7 convolutional layers and 4 convolutional predictor
-    layers that take their input from layers 4, 5, 6, and 7, respectively.
-
-    Most of the arguments that this function takes are only needed for the anchor
-    box layers. In case you're training the network, the parameters passed here must
-    be the same as the ones used to set up `SSDBoxEncoder`. In case you're loading
-    trained weights, the parameters passed here must be the same as the ones used
-    to produce the trained weights.
-
-    Some of these arguments are explained in more detail in the documentation of the
-    `SSDBoxEncoder` class.
-
-    Note: Requires Keras v2.0 or later. Training currently works only with the
-    TensorFlow backend (v1.0 or later).
-
-    Arguments:
-        image_size (tuple): The input image size in the format `(height, width, channels)`.
-        n_classes (int): The number of positive classes, e.g. 20 for Pascal VOC, 80 for MS COCO.
-        mode (str, optional): One of 'training', 'inference' and 'inference_fast'. In 'training' mode,
-            the model outputs the raw prediction tensor, while in 'inference' and 'inference_fast' modes,
-            the raw predictions are decoded into absolute coordinates and filtered via confidence thresholding,
-            non-maximum suppression, and top-k filtering. The difference between latter two modes is that
-            'inference' follows the exact procedure of the original Caffe implementation, while
-            'inference_fast' uses a faster prediction decoding procedure.
-        l2_regularization (float, optional): The L2-regularization rate. Applies to all convolutional layers.
-        min_scale (float, optional): The smallest scaling factor for the size of the anchor boxes as a fraction
-            of the shorter side of the input images.
-        max_scale (float, optional): The largest scaling factor for the size of the anchor boxes as a fraction
-            of the shorter side of the input images. All scaling factors between the smallest and the
-            largest will be linearly interpolated. Note that the second to last of the linearly interpolated
-            scaling factors will actually be the scaling factor for the last predictor layer, while the last
-            scaling factor is used for the second box for aspect ratio 1 in the last predictor layer
-            if `two_boxes_for_ar1` is `True`.
-        scales (list, optional): A list of floats containing scaling factors per convolutional predictor layer.
-            This list must be one element longer than the number of predictor layers. The first `k` elements are the
-            scaling factors for the `k` predictor layers, while the last element is used for the second box
-            for aspect ratio 1 in the last predictor layer if `two_boxes_for_ar1` is `True`. This additional
-            last scaling factor must be passed either way, even if it is not being used. If a list is passed,
-            this argument overrides `min_scale` and `max_scale`. All scaling factors must be greater than zero.
-        aspect_ratios_global (list, optional): The list of aspect ratios for which anchor boxes are to be
-            generated. This list is valid for all predictor layers. The original implementation uses more aspect ratios
-            for some predictor layers and fewer for others. If you want to do that, too, then use the next argument instead.
-        aspect_ratios_per_layer (list, optional): A list containing one aspect ratio list for each predictor layer.
-            This allows you to set the aspect ratios for each predictor layer individually. If a list is passed,
-            it overrides `aspect_ratios_global`.
-        two_boxes_for_ar1 (bool, optional): Only relevant for aspect ratio lists that contain 1. Will be ignored otherwise.
-            If `True`, two anchor boxes will be generated for aspect ratio 1. The first will be generated
-            using the scaling factor for the respective layer, the second one will be generated using
-            geometric mean of said scaling factor and next bigger scaling factor.
-        steps (list, optional): `None` or a list with as many elements as there are predictor layers. The elements can be
-            either ints/floats or tuples of two ints/floats. These numbers represent for each predictor layer how many
-            pixels apart the anchor box center points should be vertically and horizontally along the spatial grid over
-            the image. If the list contains ints/floats, then that value will be used for both spatial dimensions.
-            If the list contains tuples of two ints/floats, then they represent `(step_height, step_width)`.
-            If no steps are provided, then they will be computed such that the anchor box center points will form an
-            equidistant grid within the image dimensions.
-        offsets (list, optional): `None` or a list with as many elements as there are predictor layers. The elements can be
-            either floats or tuples of two floats. These numbers represent for each predictor layer how many
-            pixels from the top and left boarders of the image the top-most and left-most anchor box center points should be
-            as a fraction of `steps`. The last bit is important: The offsets are not absolute pixel values, but fractions
-            of the step size specified in the `steps` argument. If the list contains floats, then that value will
-            be used for both spatial dimensions. If the list contains tuples of two floats, then they represent
-            `(vertical_offset, horizontal_offset)`. If no offsets are provided, then they will default to 0.5 of the step size,
-            which is also the recommended setting.
-        clip_boxes (bool, optional): If `True`, clips the anchor box coordinates to stay within image boundaries.
-        variances (list, optional): A list of 4 floats >0. The anchor box offset for each coordinate will be divided by
-            its respective variance value.
-        coords (str, optional): The box coordinate format to be used internally by the model (i.e. this is not the input format
-            of the ground truth labels). Can be either 'centroids' for the format `(cx, cy, w, h)` (box center coordinates, width,
-            and height), 'minmax' for the format `(xmin, xmax, ymin, ymax)`, or 'corners' for the format `(xmin, ymin, xmax, ymax)`.
-        normalize_coords (bool, optional): Set to `True` if the model is supposed to use relative instead of absolute coordinates,
-            i.e. if the model predicts box coordinates within [0,1] instead of absolute coordinates.
-        subtract_mean (array-like, optional): `None` or an array-like object of integers or floating point values
-            of any shape that is broadcast-compatible with the image shape. The elements of this array will be
-            subtracted from the image pixel intensity values. For example, pass a list of three integers
-            to perform per-channel mean normalization for color images.
-        divide_by_stddev (array-like, optional): `None` or an array-like object of non-zero integers or
-            floating point values of any shape that is broadcast-compatible with the image shape. The image pixel
-            intensity values will be divided by the elements of this array. For example, pass a list
-            of three integers to perform per-channel standard deviation normalization for color images.
-        swap_channels (list, optional): Either `False` or a list of integers representing the desired order in which the input
-            image channels should be swapped.
-        confidence_thresh (float, optional): A float in [0,1), the minimum classification confidence in a specific
-            positive class in order to be considered for the non-maximum suppression stage for the respective class.
-            A lower value will result in a larger part of the selection process being done by the non-maximum suppression
-            stage, while a larger value will result in a larger part of the selection process happening in the confidence
-            thresholding stage.
-        iou_threshold (float, optional): A float in [0,1]. All boxes that have a Jaccard similarity of greater than `iou_threshold`
-            with a locally maximal box will be removed from the set of predictions for a given class, where 'maximal' refers
-            to the box's confidence score.
-        top_k (int, optional): The number of highest scoring predictions to be kept for each batch item after the
-            non-maximum suppression stage.
-        nms_max_output_size (int, optional): The maximal number of predictions that will be left over after the NMS stage.
-        return_predictor_sizes (bool, optional): If `True`, this function not only returns the model, but also
-            a list containing the spatial dimensions of the predictor layers. This isn't strictly necessary since
-            you can always get their sizes easily via the Keras API, but it's convenient and less error-prone
-            to get them this way. They are only relevant for training anyway (SSDBoxEncoder needs to know the
-            spatial dimensions of the predictor layers), for inference you don't need them.
-
-    Returns:
-        model: The Keras SSD model.
-        predictor_sizes (optional): A Numpy array containing the `(height, width)` portion
-            of the output tensor shape for each convolutional predictor layer. During
-            training, the generator function needs this in order to transform
-            the ground truth labels into tensors of identical structure as the
-            output tensors of the model, which is in turn needed for the cost
-            function.
-
-    References:
-        https://arxiv.org/abs/1512.02325v5
-    '''
 
     n_predictor_layers = 4 # The number of predictor conv layers in the network
     n_classes += 1 # Account for the background class.
@@ -273,42 +151,53 @@ def build_model(image_size,
         x1 = Lambda(input_stddev_normalization, output_shape=(img_height, img_width, img_channels), name='input_stddev_normalization')(x1)
     if swap_channels:
         x1 = Lambda(input_channel_swap, output_shape=(img_height, img_width, img_channels), name='input_channel_swap')(x1)
-
     if mode == 'hardware':
         x1 = x
     conv1 = Conv2D(32, (5, 5), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv1')(x1)
     conv1 = BatchNormalization(axis=3, momentum=0.99, name='bn1')(conv1) # Tensorflow uses filter format [filter_height, filter_width, in_channels, out_channels], hence axis = 3
-    conv1 = ELU(name='elu1')(conv1)
+    # conv1 = ELU(name='elu1')(conv1)
+    conv1 = LeakyReLU(0.125)(conv1)
     pool1 = MaxPooling2D(pool_size=(2, 2), name='pool1')(conv1)
-
-    conv2 = Conv2D(48, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv2')(pool1)
+    #48
+    conv2 = Conv2D(64, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv2')(pool1)
     conv2 = BatchNormalization(axis=3, momentum=0.99, name='bn2')(conv2)
-    conv2 = ELU(name='elu2')(conv2)
+    conv2 = LeakyReLU(0.125)(conv2)
+    conv2 = Conv2D(64, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv2_2')(conv2)
+    conv2 = BatchNormalization(axis=3, momentum=0.99, name='bn2_2')(conv2)
+    conv2 = LeakyReLU(0.125)(conv2)
     pool2 = MaxPooling2D(pool_size=(2, 2), name='pool2')(conv2)
-
-    conv3 = Conv2D(64, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv3')(pool2)
+    # 64
+    conv3 = Conv2D(128, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv3')(pool2)
     conv3 = BatchNormalization(axis=3, momentum=0.99, name='bn3')(conv3)
-    conv3 = ELU(name='elu3')(conv3)
+    conv3 = LeakyReLU(0.125)(conv3)
+    conv3 = Conv2D(128, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv3_2')(conv3)
+    conv3 = BatchNormalization(axis=3, momentum=0.99, name='bn3_2')(conv3)
+    conv3 = LeakyReLU(0.125)(conv3)
     pool3 = MaxPooling2D(pool_size=(2, 2), name='pool3')(conv3)
-
-    conv4 = Conv2D(64, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv4')(pool3)
+    # 64
+    conv4 = Conv2D(256, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv4')(pool3)
     conv4 = BatchNormalization(axis=3, momentum=0.99, name='bn4')(conv4)
-    conv4 = ELU(name='elu4')(conv4)
+    conv4 = LeakyReLU(0.125)(conv4)
+    conv4 = Conv2D(256, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv4_2')(conv4)
+    conv4 = BatchNormalization(axis=3, momentum=0.99, name='bn4_2')(conv4)
+    conv4 = LeakyReLU(0.125)(conv4)
     pool4 = MaxPooling2D(pool_size=(2, 2), name='pool4')(conv4)
-
-    conv5 = Conv2D(48, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv5')(pool4)
+    # 48
+    conv5 = Conv2D(128, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv5')(pool4)
     conv5 = BatchNormalization(axis=3, momentum=0.99, name='bn5')(conv5)
-    conv5 = ELU(name='elu5')(conv5)
+    conv5 = LeakyReLU(0.125)(conv5)
     pool5 = MaxPooling2D(pool_size=(2, 2), name='pool5')(conv5)
-
-    conv6 = Conv2D(48, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv6')(pool5)
+    # 48
+    conv6 = Conv2D(64, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv6')(pool5)
     conv6 = BatchNormalization(axis=3, momentum=0.99, name='bn6')(conv6)
-    conv6 = ELU(name='elu6')(conv6)
-    pool6 = MaxPooling2D(pool_size=(2, 2), name='pool6')(conv6)
+    conv6 = LeakyReLU(0.125)(conv6)
+#     pool6 = MaxPooling2D(pool_size=(2, 2), name='pool6')(conv6)
 
+    pool6 = conv6
+    # 32
     conv7 = Conv2D(32, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='conv7')(pool6)
     conv7 = BatchNormalization(axis=3, momentum=0.99, name='bn7')(conv7)
-    conv7 = ELU(name='elu7')(conv7)
+    conv7 = LeakyReLU(0.125)(conv7)
 
     # The next part is to add the convolutional predictor layers on top of the base network
     # that we defined above. Note that I use the term "base network" differently than the paper does.
@@ -322,6 +211,11 @@ def build_model(image_size,
     # We precidt `n_classes` confidence values for each box, hence the `classes` predictors have depth `n_boxes * n_classes`
     # We predict 4 box coordinates for each box, hence the `boxes` predictors have depth `n_boxes * 4`
     # Output shape of `classes`: `(batch, height, width, n_boxes * n_classes)`
+    conv4 = Conv2D(256, (1,1))(conv4)
+    conv5 = Conv2D(192, (1,1))(conv5)
+    conv6 = Conv2D(128, (1,1))(conv6)
+    conv7 = Conv2D(96, (1,1))(conv7)
+
     classes4 = Conv2D(n_boxes[0] * n_classes, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='classes4')(conv4)
     classes5 = Conv2D(n_boxes[1] * n_classes, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='classes5')(conv5)
     classes6 = Conv2D(n_boxes[2] * n_classes, (3, 3), strides=(1, 1), padding="same", kernel_initializer='he_normal', kernel_regularizer=l2(l2_reg), name='classes6')(conv6)
@@ -418,6 +312,10 @@ def build_model(image_size,
                                                    img_width=img_width,
                                                    name='decoded_predictions')(predictions)
         model = Model(inputs=x, outputs=decoded_predictions)
+    elif mode == 'hardware':
+        model = Model(inputs=x, outputs=[classes4,classes5,classes6,classes7,boxes4,boxes5,boxes6, boxes7])
+    elif mode == 'anchor':
+        model = Model(inputs=x, outputs=[anchors4, anchors5, anchors6, anchors7])
     else:
         raise ValueError("`mode` must be one of 'training', 'inference' or 'inference_fast', but received '{}'.".format(mode))
 

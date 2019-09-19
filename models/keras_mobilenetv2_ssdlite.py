@@ -106,7 +106,9 @@ def MobileNetV2(input_shape,
 
     img_input = Input(shape=input_shape)
     if preprocess:
-        x = Lambda(lambda x: 2*x/255.-1.)(img_input)
+        x = Lambda(lambda x: x/256.-0.5)(img_input)
+    if mode == 'hardware':
+        x = img_input
     # 300
     x = _inverted_res_block(x, filters=16, alpha=alpha, stride=1, expansion=1, block_id=0)
     # 150

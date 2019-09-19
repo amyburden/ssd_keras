@@ -25,8 +25,8 @@ from keras.engine import InputSpec
 from keras.applications.inception_v3 import preprocess_input
 from keras.applications.imagenet_utils import decode_predictions
 import tensorflow as tf
-def relu6(x):
-    return K.relu(x, max_value=6)
+
+# https://github.com/tensorflow/models/blob/master/research/object_detection/models/ssd_mobilenet_v1_keras_feature_extractor.py
 
 def _conv_block(inputs, filters, alpha, kernel=(3, 3), strides=(1, 1), bn_epsilon=2e-5,
                 bn_momentum=0.95, block_id=1):
@@ -40,7 +40,8 @@ def _conv_block(inputs, filters, alpha, kernel=(3, 3), strides=(1, 1), bn_epsilo
                name='conv%d' % block_id)(inputs)
     x = BatchNormalization(axis=channel_axis, momentum=bn_momentum, epsilon=bn_epsilon,
                            name='conv%d_bn' % block_id)(x)
-    return Activation(relu6, name='conv%d_relu' % block_id)(x)
+    x = ReLU(max_value=6, name='conv%d_relu' % block_id)(x)
+    return x
 
 
 # taken from https://github.com/tensorflow/models/blob/master/research/slim/nets/mobilenet/conv_blocks.py
@@ -68,7 +69,7 @@ def _depthwise_conv_block(inputs, pointwise_conv_filters, alpha,
                         use_bias=False,
                         name='conv_dw_%d' % block_id)(inputs)
     x = BatchNormalization(axis=channel_axis, epsilon=bn_epsilon, name='conv_dw_%d_bn' % block_id)(x)
-    x = Activation(relu6, name='conv_dw_%d_relu' % block_id)(x)
+    x = ReLU(max_value=6, name='conv_dw_%d_relu' % block_id)(x)
 
     x = Conv2D(pointwise_conv_filters, (1, 1),
                padding='same',
@@ -76,7 +77,7 @@ def _depthwise_conv_block(inputs, pointwise_conv_filters, alpha,
                strides=(1, 1),
                name='conv_pw_%d' % block_id)(x)
     x = BatchNormalization(axis=channel_axis, epsilon=bn_epsilon, name='conv_pw_%d_bn' % block_id)(x)
-    return Activation(relu6, name='conv_pw_%d_relu' % block_id)(x)
+    return ReLU(max_value=6,  name='conv_pw_%d_relu' % block_id)(x)
 
 def ssd_mn_300(image_size,
             n_classes,
@@ -108,26 +109,12 @@ def ssd_mn_300(image_size,
             nms_max_output_size=400,
             return_predictor_sizes=False,
             alpha = 1.0,
-           depth_multiplier=1,
+            depth_multiplier=1,
             expansion_factor=6,
            ):
     '''
     Build a Keras model with SSD300 architecture, see references.
 
-    The base network is a reduced atrous VGG-16, extended by the SSD architecture,
-    as described in the paper.
-
-    Most of the arguments that this function takes are only needed for the anchor
-    box layers. In case you're training the network, the parameters passed here must
-    be the same as the ones used to set up `SSDBoxEncoder`. In case you're loading
-    trained weights, the parameters passed here must be the same as the ones used
-    to produce the trained weights.
-
-    Some of these arguments are explained in more detail in the documentation of the
-    `SSDBoxEncoder` class.
-
-    Note: Requires Keras v2.0 or later. Currently works only with the
-    TensorFlow backend (v1.0 or later).
 
     Arguments:
         image_size (tuple): The input image size in the format `(height, width, channels)`.
@@ -326,7 +313,8 @@ def ssd_mn_300(image_size,
         x1 = Lambda(input_stddev_normalization, output_shape=(img_height, img_width, img_channels), name='input_stddev_normalization')(x1)
     if swap_channels:
         x1 = Lambda(input_channel_swap, output_shape=(img_height, img_width, img_channels), name='input_channel_swap')(x1)
-
+    if mode == 'hardware':
+        x1 = inputs
     # 300
     x = _conv_block(x1, 32, alpha, strides=(2, 2))
     x = _depthwise_conv_block(x, 64, alpha, depth_multiplier, block_id=1)
@@ -380,7 +368,10 @@ def ssd_mn_300(image_size,
     conv17_2 = BatchNormalization(epsilon=2e-5, name='bn17_2')(conv17_2)
     conv17_2 = Activation('relu')(conv17_2)
     # Feed conv4_3 into the L2 normalization layer
-    conv11_norm = L2Normalization(gamma_init=20, name='conv11_norm')(conv11)
+    # conv11_norm = L2Normalization(gamma_init=20, name='conv11_norm')(conv11)
+
+    gamma_init = 20
+    conv11_norm = Lambda(lambda x: K.l2_normalize(x, -1) * gamma_init, name='conv11_norm')(conv11)
 
     ### Build the convolutional predictor layers on top of the base network
 
